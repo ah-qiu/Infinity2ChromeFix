@@ -27,6 +27,7 @@ interface Site {
   bgType: string
   initials: string
   parentId: string
+  children?: Site[]  // 文件夹可以包含子项
 }
 
 interface InfinityBackupData {
@@ -50,7 +51,27 @@ export function SitesViewer() {
   const [sitesData, setSitesData] = useState<InfinityBackupData | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
   const [fileName, setFileName] = useState<string | null>(null)
+  const [debugInfo, setDebugInfo] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+
+
+
+  // 递归规范化站点数据
+  const normalizeSites = (sites: Site[]): Site[] => {
+    return sites.map((site) => {
+      // 如果没有 type 但有 children，标记为 folder
+      if (!site.type && site.children && Array.isArray(site.children)) {
+        site.type = "folder"
+      }
+
+      // 递归处理子项
+      if (site.children && Array.isArray(site.children)) {
+        site.children = normalizeSites(site.children)
+      }
+      return site
+    })
+  }
 
   const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -65,18 +86,76 @@ export function SitesViewer() {
     reader.onload = (e) => {
       try {
         const content = e.target?.result as string
-        const parsed = JSON.parse(content) as InfinityBackupData
+        const parsed = JSON.parse(content)
 
-        if (!parsed.data?.site?.sites || !Array.isArray(parsed.data.site.sites)) {
-          setImportError("无效的 Infinity 备份文件格式")
+        // 尝试多种可能的数据结构
+        let backupData: InfinityBackupData | null = null
+
+        // 情况1: 标准格式 - data.site.sites
+        if (parsed.data?.site?.sites && Array.isArray(parsed.data.site.sites)) {
+          backupData = parsed as InfinityBackupData
+        }
+        // 情况2: infinity 文件夹格式 - infinity.data.site.sites
+        else if (parsed.infinity?.data?.site?.sites && Array.isArray(parsed.infinity.data.site.sites)) {
+          backupData = parsed.infinity as InfinityBackupData
+        }
+        // 情况3: 直接包含 sites 数组
+        else if (parsed.site?.sites && Array.isArray(parsed.site.sites)) {
+          backupData = {
+            version: parsed.version || "unknown",
+            browserEnv: parsed.browserEnv || "unknown",
+            editionEnv: parsed.editionEnv || "unknown",
+            backupType: parsed.backupType || "unknown",
+            time: parsed.time || Date.now(),
+            extVersion: parsed.extVersion || "unknown",
+            data: {
+              site: parsed.site,
+            },
+          }
+        }
+        // 情况4: 检查是否有 infinity 键,但结构不同
+        else if (parsed.infinity) {
+          // 尝试从 infinity 对象中提取数据
+          const infinityData = parsed.infinity
+          if (infinityData.site?.sites && Array.isArray(infinityData.site.sites)) {
+            backupData = {
+              version: infinityData.version || parsed.version || "unknown",
+              browserEnv: infinityData.browserEnv || parsed.browserEnv || "unknown",
+              editionEnv: infinityData.editionEnv || parsed.editionEnv || "unknown",
+              backupType: infinityData.backupType || parsed.backupType || "unknown",
+              time: infinityData.time || parsed.time || Date.now(),
+              extVersion: infinityData.extVersion || parsed.extVersion || "unknown",
+              data: {
+                site: infinityData.site,
+              },
+            }
+          }
+        }
+
+        if (!backupData) {
+          // 提供详细的错误信息,帮助调试
+          console.error("无法识别的文件结构:", parsed)
+          const keys = Object.keys(parsed).join(", ")
+          setImportError(
+            `无效的 Infinity 备份文件格式。文件包含的顶层键: ${keys}。请确保这是从 Infinity 扩展导出的备份文件。`,
+          )
+          setDebugInfo(JSON.stringify(parsed, null, 2))
           return
         }
 
-        setSitesData(parsed)
+        // 规范化数据：修复缺失的 type 属性
+        if (backupData.data?.site?.sites) {
+          backupData.data.site.sites = backupData.data.site.sites.map((page) => normalizeSites(page))
+        }
+
+        setSitesData(backupData)
         setFileName(file.name)
         setImportError(null)
-      } catch {
-        setImportError("解析文件失败，请确保文件格式正确")
+        setDebugInfo(null)
+      } catch (error) {
+        console.error("解析文件失败:", error)
+        setImportError(`解析文件失败: ${error instanceof Error ? error.message : "请确保文件格式正确"}`)
+        setDebugInfo(null)
       }
     }
     reader.onerror = () => {
@@ -89,28 +168,49 @@ export function SitesViewer() {
     setSitesData(null)
     setFileName(null)
     setImportError(null)
+    setDebugInfo(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
   }
 
+  // 递归提取所有站点,包括文件夹中的子站点
+  const extractAllSites = (sites: Site[]): Site[] => {
+    const result: Site[] = []
+
+    for (const site of sites) {
+      // 添加当前站点
+      result.push(site)
+
+      // 如果是文件夹且有子项,递归提取
+      if (site.type === "folder" && site.children && Array.isArray(site.children)) {
+        const childSites = extractAllSites(site.children)
+        result.push(...childSites)
+      }
+    }
+
+    return result
+  }
+
   const allSites: Site[] = useMemo(() => {
     if (!sitesData) return []
-    return sitesData.data.site.sites.flat()
+    // 先展平所有页面,然后递归提取每个站点(包括文件夹中的)
+    const flatPages = sitesData.data.site.sites.flat()
+    return extractAllSites(flatPages)
   }, [sitesData])
 
   const filteredSites = useMemo(() => {
     return allSites.filter((site) => {
       const matchesSearch =
         site.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        site.target.toLowerCase().includes(searchQuery.toLowerCase())
+        (site.target?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
       const matchesType = selectedTypes.includes(site.type)
       return matchesSearch && matchesType
     })
   }, [allSites, searchQuery, selectedTypes])
 
   const webSites = useMemo(() => {
-    return allSites.filter((site) => site.type === "web" && site.target.startsWith("http"))
+    return allSites.filter((site) => site.type === "web" && site.target?.startsWith("http"))
   }, [allSites])
 
   const generateChromeBookmarksHTML = () => {
@@ -245,7 +345,21 @@ export function SitesViewer() {
                 </div>
               )}
 
-              {importError && <p className="text-sm text-destructive">{importError}</p>}
+              {importError && (
+                <div className="w-full space-y-2">
+                  <p className="text-sm text-destructive">{importError}</p>
+                  {debugInfo && (
+                    <details className="mt-2">
+                      <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                        点击查看文件结构详情 (用于调试)
+                      </summary>
+                      <pre className="mt-2 p-3 bg-muted rounded-md text-xs overflow-auto max-h-60">
+                        {debugInfo}
+                      </pre>
+                    </details>
+                  )}
+                </div>
+              )}
             </div>
 
             {sitesData && (
@@ -420,7 +534,7 @@ export function SitesViewer() {
 }
 
 function SiteCard({ site }: { site: Site }) {
-  const isClickable = site.target.startsWith("http")
+  const isClickable = site.target?.startsWith("http") ?? false
 
   return (
     <Card
@@ -463,7 +577,7 @@ function SiteCard({ site }: { site: Site }) {
 }
 
 function SiteListItem({ site }: { site: Site }) {
-  const isClickable = site.target.startsWith("http")
+  const isClickable = site.target?.startsWith("http") ?? false
 
   return (
     <Card
