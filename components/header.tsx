@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Chrome } from "lucide-react"
+import { Chrome, Github } from "lucide-react"
 
 export function Header() {
   return (
@@ -25,6 +25,15 @@ export function Header() {
           >
             关于
           </Link>
+          <a
+            href="https://github.com/extrastu/Infinity2Chrome"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-muted-foreground transition-colors hover:text-foreground"
+            aria-label="GitHub"
+          >
+            <Github className="h-5 w-5" />
+          </a>
         </nav>
       </div>
     </header>

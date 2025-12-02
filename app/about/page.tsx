@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Chrome, Shield, Code, ExternalLink, Lock, Upload, Download, Sparkles } from "lucide-react"
+import { Chrome, Shield, Code, ExternalLink, Lock, Upload, Download, Sparkles, Github } from "lucide-react"
 
 export const metadata = {
   title: "关于 - Infinity2Chrome | 书签迁移工具",
@@ -168,6 +168,19 @@ export default function AboutPage() {
                   className="text-primary underline underline-offset-2 hover:text-primary/80"
                 >
                   v0 by Vercel
+                </a>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                开源仓库：
+                <a
+                  href="https://github.com/extrastu/Infinity2Chrome"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary underline underline-offset-2 hover:text-primary/80 inline-flex items-center gap-1"
+                >
+                  <Github className="h-4 w-4" />
+                  GitHub
                 </a>
               </li>
             </ul>

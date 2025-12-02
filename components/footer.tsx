@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Chrome, ExternalLink } from "lucide-react"
+import { Chrome, ExternalLink, Github } from "lucide-react"
 
 export function Footer() {
   return (
@@ -49,6 +49,17 @@ export function Footer() {
           <div className="space-y-3">
             <h4 className="font-medium">技术支持</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
+              <li>
+                <a
+                  href="https://github.com/extrastu/Infinity2Chrome"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+                >
+                  <Github className="h-4 w-4" />
+                  GitHub 开源仓库
+                </a>
+              </li>
               <li>
                 <a
                   href="https://v0.app/ref/938XEW"
